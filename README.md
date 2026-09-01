@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OpenDebate
 
-## Getting Started
+Two AI debaters are given the same topic. They independently research it for a limited time, argue opposing positions, rebut each other, cross-examine one another, and an **independent AI Judge** scores the debate on a transparent rubric and declares a winner.
 
-First, run the development server:
+The system prioritizes **fairness, evidence, reasoning, and transparency** over entertaining AI chatter. The winner is decided by evidence quality, argument strength, rebuttal quality, logical reasoning, engagement with the opponent, and clarity — never by confidence, length, or vocabulary.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## How it works
+
+```
+Topic
+  ├── Debater A (FOR)      ── researches independently, 60s budget ──┐
+  ├── Debater B (AGAINST)  ── researches independently, 60s budget ──┤
+  │                                                                 │
+  ├── Opening A → Opening B → Rebuttal A → Rebuttal B              │
+  ├── Cross examination (A asks B, B asks A)                        │
+  ├── Closing A → Closing B                                         │
+  └── AI Judge (anonymized, rubric-based scoring) ◄─────────────────┘
+                          ↓
+                    Winner + scores
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- The debate protocol is a **strict server-side state machine** (`lib/debate-engine/engine.ts`); agents never decide what happens next.
+- Research is **parallel and isolated**: each debater gets its own budget (60s, 5 searches, 10 sources) and never sees the opponent's research.
+- The Judge receives **anonymized** positions (POSITION 1 / POSITION 2, randomly assigned) to avoid positional bias, and must return structured, arithmetically-validated scores.
+- Live updates stream to the UI over **Server-Sent Events** with full state snapshots, so reconnecting clients rebuild instantly.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Getting started
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+cp .env.example .env.local   # add your OPENAI_API_KEY (and TAVILY_API_KEY for research)
+npm run dev
+```
 
-## Learn More
+Open http://localhost:3000, enter a topic, and watch the debate unfold live.
 
-To learn more about Next.js, take a look at the following resources:
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | yes | Powers debaters and judge |
+| `TAVILY_API_KEY` | no | Enables the research phase (debates still run without it) |
+| `OPENAI_DEBATER_MODEL` | no | Default `gpt-4o-mini` |
+| `OPENAI_JUDGE_MODEL` | no | Default `gpt-4o` |
+| `OPENAI_BASE_URL` | no | Point at any OpenAI-compatible endpoint (e.g. local model) |
+| `DATA_DIR` | no | Debate JSON storage (default `./data/debates`) |
+| `MAX_ACTIVE_DEBATES` | no | Concurrency cap (default 5) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project layout
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+lib/domain/          Debate types, stage machine, judge result validation
+lib/ai/              Provider / Debater / Judge abstractions + OpenAI impl
+lib/research/        Tavily search tool
+lib/prompts/         All LLM prompts, separate from logic
+lib/debate-engine/   State machine runner, event bus, JSON file store
+lib/client/          SSE hook (useDebateStream)
+app/api/debates/     Create · fetch · SSE stream endpoints
+components/          Arena, stage indicator, transcript, sources, results
+tests/               Vitest suites (state machine, research isolation, judge, engine)
+```
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run dev        # start dev server
+npm run build      # production build
+npm start          # run production build
+npm run lint       # eslint
+npx tsc --noEmit   # typecheck
+npx vitest run     # tests
+```
