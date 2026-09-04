@@ -1,26 +1,302 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: the `dark` class is set on <html> by the
+   blocking theme-init script in app/layout.tsx (see lib/client/use-theme.ts). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Design tokens — "Ink & Arena"
+   A restrained editorial system: paper-like neutrals carry the UI, and the only
+   chroma are the two opponent colours (FOR = teal, AGAINST = vermillion). The
+   brand "accent" is ink itself, so primary actions read as confident black
+   buttons rather than a decorative glow.
+   --------------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  /* Surfaces — cool, near-white neutrals (not warm cream) */
+  --bg: #f2f3f5;
+  --surface: #ffffff;
+  --surface-muted: #f7f8fa;
+  --surface-sunken: #e9ebef;
+
+  /* Lines */
+  --border: #e2e5ea;
+  --border-strong: #ccd1d9;
+
+  /* Ink */
+  --fg: #15171c;
+  --fg-muted: #545b66;
+  --fg-subtle: #8a909b;
+
+  /* Brand accent = ink. Primary actions are near-black on light, near-white on dark. */
+  --accent: #15171c;
+  --accent-strong: #0c0d10;
+  --accent-soft: #eceef1;
+  --accent-border: #ccd1d9;
+  --accent-contrast: #f2f3f5;
+
+  /* Debater A — FOR (teal / affirmative) */
+  --for: #0e8a6e;
+  --for-soft: #d9f1ea;
+  --for-border: #a6ddce;
+
+  /* Debater B — AGAINST (vermillion / opposition) */
+  --against: #b8442b;
+  --against-soft: #fbe5df;
+  --against-border: #f0b6a9;
+
+  /* Status */
+  --danger: #c23a2f;
+  --danger-soft: #fbe6e3;
+  --danger-border: #f0b3aa;
+
+  --success: #1c9e63;
+  --success-soft: #def3e8;
+  --success-border: #a9ddc4;
+
+  /* "live" reuses the success green family — a connected stream is a go state. */
+  --live: #1c9e63;
+  --live-soft: #def3e8;
+  --live-border: #a9ddc4;
+
+  --warning: #b06a16;
+
+  /* Focus ring — high contrast, not a decorative glow. */
+  --ring: #2563eb;
+
+  /* Corner-radius scale — one system, documented and applied everywhere. */
+  --radius-panel: 14px;
+  --radius-control: 10px;
 }
 
+.dark {
+  color-scheme: dark;
+
+  --bg: #0c0d10;
+  --surface: #16181d;
+  --surface-muted: #1c1f25;
+  --surface-sunken: #242831;
+
+  --border: #2a2e36;
+  --border-strong: #3b424d;
+
+  --fg: #eef0f3;
+  --fg-muted: #a3abb7;
+  --fg-subtle: #6e767f;
+
+  --accent: #e6e9ee;
+  --accent-strong: #f4f6f8;
+  --accent-soft: #23262d;
+  --accent-border: #3b424d;
+  --accent-contrast: #0c0d10;
+
+  --for: #4fd1a8;
+  --for-soft: #0e2e27;
+  --for-border: #1d5b4d;
+
+  --against: #ef8a76;
+  --against-soft: #341a14;
+  --against-border: #7a3a2c;
+
+  --danger: #f08a80;
+  --danger-soft: #2e1512;
+  --danger-border: #7a352c;
+
+  --success: #5fd6a0;
+  --success-soft: #0e2a1f;
+  --success-border: #1d6b4a;
+
+  --live: #5fd6a0;
+  --live-soft: #0e2a1f;
+  --live-border: #1d6b4a;
+
+  --warning: #e0a44a;
+
+  --ring: #60a5fa;
+}
+
+/* Expose tokens to Tailwind so utilities like `bg-surface` / `text-fg-muted`
+   automatically follow the active theme. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-border: var(--accent-border);
+  --color-accent-contrast: var(--accent-contrast);
+
+  --color-for: var(--for);
+  --color-for-soft: var(--for-soft);
+  --color-for-border: var(--for-border);
+
+  --color-against: var(--against);
+  --color-against-soft: var(--against-soft);
+  --color-against-border: var(--against-border);
+
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-border: var(--danger-border);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-border: var(--success-border);
+
+  --color-live: var(--live);
+  --color-live-soft: var(--live-soft);
+  --color-live-border: var(--live-border);
+
+  --color-warning: var(--warning);
+
+  --color-ring: var(--ring);
+
+  /* One corner-radius scale. */
+  --radius-panel: 14px;
+  --radius-control: 10px;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ---------------------------------------------------------------------------
+   Base
+   --------------------------------------------------------------------------- */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    /* A faint arena grain — fixed, non-interactive, GPU-cheap. */
+    background-image: radial-gradient(
+      circle at 50% 0%,
+      color-mix(in srgb, var(--fg) 3%, transparent),
+      transparent 60%
+    );
+    background-repeat: no-repeat;
+  }
+
+  /* A single, consistent, always-visible focus indicator. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+
+  /* Never rely on colour alone to convey state. */
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--fg);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ---------------------------------------------------------------------------
+   Utilities
+   --------------------------------------------------------------------------- */
+
+/* Scroll containers: thin, theme-aware scrollbars. */
+@utility scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  overscroll-behavior: contain;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 9999px;
+  }
+}
+
+/* Card surface used across panels. */
+@utility panel {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+/* Entrance reveal — staggered via inline animation-delay. Collapses to static
+   under reduced motion (see media query below). */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility reveal {
+  opacity: 0;
+  animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Skip link — hidden until focused. */
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background-color: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 150ms ease;
+}
+
+.skip-link:focus-visible {
+  top: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion: honour the user's OS-level reduced-motion preference.
+   Components also read this via usePrefersReducedMotion for JS-driven
+   animation (e.g. smooth scrolling) that CSS cannot reach.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Reveal must never leave content hidden when animation is off. */
+  .reveal {
+    opacity: 1 !important;
+    animation: none !important;
+  }
 }
