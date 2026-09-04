@@ -50,23 +50,35 @@ export type ProviderName = "openai" | "gemini";
 const KNOWN_PROVIDERS: readonly ProviderName[] = ["openai", "gemini"];
 
 /**
- * Resolves the provider for a role from an env object. Unset falls back to
- * `"openai"` for backward compatibility. An explicit but unknown value (a typo,
- * renamed provider, ...) throws instead of silently defaulting — a
- * misconfiguration should fail loudly, not degrade silently.
+ * Resolves the provider for a role from an env object.
+ *
+ * - An explicit per-role choice (`DEBATER_PROVIDER` / `JUDGE_PROVIDER`) always
+ *   wins and is validated against the known set (a typo throws rather than
+ *   silently defaulting).
+ * - The judge follows the debater when unset, so flipping one `DEBATER_PROVIDER`
+ *   switch moves both roles onto the same provider.
+ * - With no explicit choice, prefer Gemini when it is the *only* key present,
+ *   otherwise stay on the OpenAI default for backward compatibility. This means
+ *   dropping in a `GEMINI_API_KEY` is enough to run fully on Gemini.
  */
 export function resolveProvider(
   env: NodeJS.ProcessEnv,
   role: "debater" | "judge",
 ): ProviderName {
   const raw = role === "debater" ? env.DEBATER_PROVIDER : env.JUDGE_PROVIDER;
-  if (raw === undefined) return "openai";
-  if ((KNOWN_PROVIDERS as readonly string[]).includes(raw)) {
-    return raw as ProviderName;
+  if (raw !== undefined) {
+    if ((KNOWN_PROVIDERS as readonly string[]).includes(raw)) {
+      return raw as ProviderName;
+    }
+    throw new Error(
+      `Unknown AI provider "${raw}". Expected one of: ${KNOWN_PROVIDERS.join(", ")}`,
+    );
   }
-  throw new Error(
-    `Unknown AI provider "${raw}". Expected one of: ${KNOWN_PROVIDERS.join(", ")}`,
-  );
+  if (role === "judge") {
+    return resolveProvider(env, "debater");
+  }
+  if (env.GEMINI_API_KEY && !env.OPENAI_API_KEY) return "gemini";
+  return "openai";
 }
 
 /**

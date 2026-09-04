@@ -43,11 +43,12 @@ describe("runtime.build provider selection", () => {
     expect(googleCtor).not.toHaveBeenCalled();
   });
 
-  it("mixes providers and only requires the keys in use", () => {
+  it("mixes providers when JUDGE_PROVIDER is set explicitly", () => {
     const rt = build({
       OPENAI_API_KEY: "ok",
       GEMINI_API_KEY: "gk",
       DEBATER_PROVIDER: "gemini",
+      JUDGE_PROVIDER: "openai",
       DATA_DIR,
     } as unknown as NodeJS.ProcessEnv);
     expect(rt).toBeDefined();
@@ -61,6 +62,40 @@ describe("runtime.build provider selection", () => {
     };
     expect(geminiArgs.apiKey).toBe("gk");
     expect(geminiArgs.model).toContain("gemini");
+  });
+
+  it("uses Gemini for both roles when only GEMINI_API_KEY is present", () => {
+    const rt = build({
+      GEMINI_API_KEY: "gk",
+      DATA_DIR,
+    } as unknown as NodeJS.ProcessEnv);
+    expect(rt).toBeDefined();
+    // No explicit provider chosen: Gemini is the only key, so both roles use it.
+    expect(googleCtor).toHaveBeenCalledTimes(2);
+    expect(openaiCtor).not.toHaveBeenCalled();
+  });
+
+  it("the judge follows the debater when JUDGE_PROVIDER is unset", () => {
+    const rt = build({
+      DEBATER_PROVIDER: "gemini",
+      GEMINI_API_KEY: "gk",
+      DATA_DIR,
+    } as unknown as NodeJS.ProcessEnv);
+    expect(rt).toBeDefined();
+    // One switch moves both roles.
+    expect(googleCtor).toHaveBeenCalledTimes(2);
+    expect(openaiCtor).not.toHaveBeenCalled();
+  });
+
+  it("stays on OpenAI when both keys are present and none is chosen", () => {
+    const rt = build({
+      OPENAI_API_KEY: "ok",
+      GEMINI_API_KEY: "gk",
+      DATA_DIR,
+    } as unknown as NodeJS.ProcessEnv);
+    expect(rt).toBeDefined();
+    expect(openaiCtor).toHaveBeenCalledTimes(2);
+    expect(googleCtor).not.toHaveBeenCalled();
   });
 
   it("throws MissingConfigError naming the missing key for the provider in use", () => {
