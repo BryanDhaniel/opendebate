@@ -17,14 +17,20 @@ function positiveInt(raw: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
+// Per-stage output budgets. These are hard ceilings, not targets — the word
+// targets that shape the prose live in `lib/prompts/debater.ts`. At roughly
+// 0.75 words per token: opening ~450 words, rebuttal ~375, answer ~300,
+// closing ~340. Cross-examination questions stay short by design (one question).
+// NOTE: on Gemini, thinking tokens are charged against these budgets — see the
+// `thinking_level` note in lib/ai/google-provider.ts.
 export const TOKEN_LIMITS = {
-  researchQueries: 300,
-  researchSynthesis: 1200,
-  opening: 250,
-  rebuttal: 250,
-  question: 100,
-  answer: 150,
-  closing: 150,
+  researchQueries: 400,
+  researchSynthesis: 1600,
+  opening: 600,
+  rebuttal: 500,
+  question: 120,
+  answer: 400,
+  closing: 450,
   judge: 2000,
 } as const;
 

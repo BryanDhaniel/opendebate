@@ -35,10 +35,7 @@ export class GoogleProvider implements AIProvider {
         model: this.modelId,
         input: input.prompt,
         system_instruction: input.system,
-        // The Interactions API has no temperature parameter; we accept it on the
-        // contract for parity with the OpenAI provider but deliberately do not
-        // forward it (passing an unknown field is a type error on GenerationConfig).
-        generation_config: { max_output_tokens: input.maxOutputTokens },
+        generation_config: generationConfig(input),
       },
       requestOptions(input.timeoutMs),
     );
@@ -51,7 +48,7 @@ export class GoogleProvider implements AIProvider {
         model: this.modelId,
         input: input.prompt,
         system_instruction: input.system,
-        generation_config: { max_output_tokens: input.maxOutputTokens },
+        generation_config: generationConfig(input),
         // Structured output: the model is constrained to a JSON object matching
         // the supplied JSON Schema. Gemini's schema subset is OpenAPI 3.0.
         response_format: {
@@ -83,6 +80,27 @@ export class GoogleProvider implements AIProvider {
  */
 function requestOptions(timeoutMs?: number) {
   return timeoutMs ? { timeout_ms: timeoutMs } : {};
+}
+
+/**
+ * Builds the generation config shared by both call shapes.
+ *
+ * `thinking_level` is the important one: Gemini 3 models reason before
+ * replying, and those thinking tokens are charged against
+ * `max_output_tokens`. Left at the default, a 600-token opening budget can
+ * come back nearly empty because the model spent it on internal reasoning.
+ * "low" keeps some deliberation while reserving the budget for the prose the
+ * audience actually reads.
+ *
+ * `temperature` is deliberately not forwarded — the Interactions API has no
+ * such parameter, so passing one is a type error on GenerationConfig. We still
+ * accept it on the shared contract for parity with the OpenAI provider.
+ */
+function generationConfig(input: { maxOutputTokens?: number }) {
+  return {
+    max_output_tokens: input.maxOutputTokens,
+    thinking_level: "low",
+  };
 }
 
 /**

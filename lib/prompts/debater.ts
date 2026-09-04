@@ -48,11 +48,12 @@ export function openingPrompt(
   return {
     system: `You are a competitive debater arguing ${position} on a topic. Write your opening statement. Rules:
 - Clearly establish your position in the first sentence
-- Present your 2-3 strongest arguments
+- Present your 2-3 strongest arguments, and develop each one with reasoning and evidence rather than just asserting it
 - Cite evidence from your research with attribution (name the publisher)
-- Be concise, precise, and rational; no theatrics, no emotional appeals, no rhetorical padding
+- Explain the mechanism or causal chain behind each claim, not just the headline fact
+- Be precise and rational; no theatrics, no emotional appeals, no rhetorical padding
 - Do NOT respond to the opponent; they have not spoken yet
-- Maximum ${TOKEN_LIMITS.opening} tokens`,
+- Aim for 380-450 words. Write substantively to fill that range; a two-sentence answer is a failure. Hard ceiling ${TOKEN_LIMITS.opening} tokens`,
     prompt: `Topic: "${topic}"
 
 Your research notes:
@@ -81,8 +82,9 @@ export function rebuttalPrompt(input: {
 Rules:
 - Attack the opponent's strongest arguments, not straw men
 - Use evidence from your own research where possible, with attribution
+- Explain WHY each attacked point fails, and what follows if your attack lands
 - Be precise and rational; no theatrics
-- Maximum ${TOKEN_LIMITS.rebuttal} tokens`,
+- Aim for 300-380 words. Address at least two distinct points from the opponent; a one-line dismissal is a failure. Hard ceiling ${TOKEN_LIMITS.rebuttal} tokens`,
     prompt: `Topic: "${input.topic}"
 
 Your research notes:
@@ -110,7 +112,7 @@ export function questionPrompt(input: {
 - Challenge an important assumption or a weakness in their case
 - A question they cannot answer well with available evidence is ideal
 - One question only, self-contained, no multi-part lists
-- Maximum ${TOKEN_LIMITS.question} tokens`,
+- Keep it to 1-3 sentences and make every word carry weight; this is the one stage that should stay short. Hard ceiling ${TOKEN_LIMITS.question} tokens`,
     prompt: `Topic: "${input.topic}"
 
 Debate so far:
@@ -130,8 +132,9 @@ export function answerPrompt(input: {
     system: `You are a competitive debater arguing ${input.position}. This is cross-examination: answer your opponent's question directly. Rules:
 - Answer the question asked, not the question you wish were asked
 - Support with evidence from your research where possible, with attribution
+- Concede what genuinely must be conceded, then protect the rest of your case
 - If the answer is genuinely uncertain or unknown, say so honestly
-- Maximum ${TOKEN_LIMITS.answer} tokens`,
+- Aim for 230-300 words. Give a direct one-sentence answer first, then substantiate it; do not stop at the one sentence. Hard ceiling ${TOKEN_LIMITS.answer} tokens`,
     prompt: `Topic: "${input.topic}"
 
 Your research notes:
@@ -152,11 +155,11 @@ export function closingPrompt(input: {
 }) {
   return {
     system: `You are a competitive debater arguing ${input.position}. Write your closing statement. Rules:
-- Summarize your single strongest argument
-- Explain why the opposing position is weaker
+- Summarize your strongest arguments and the key clash points where the debate actually turned
+- Explain why the opposing position is weaker, weighing the whole debate rather than one exchange
 - Reference only evidence already introduced in the debate
 - Do NOT introduce completely new major arguments
-- Maximum ${TOKEN_LIMITS.closing} tokens`,
+- Aim for 270-340 words. Show why you won the clash points; a summary alone is not a closing. Hard ceiling ${TOKEN_LIMITS.closing} tokens`,
     prompt: `Topic: "${input.topic}"
 
 Your research notes:

@@ -50,7 +50,12 @@ describe("GoogleProvider", () => {
       model: "gemini-3.8-flash",
       input: "hello",
       system_instruction: "be concise",
-      generation_config: { max_output_tokens: 123 },
+      generation_config: {
+        max_output_tokens: 123,
+        // Thinking tokens are charged against max_output_tokens, so reasoning
+        // must stay light or the visible reply gets starved.
+        thinking_level: "low",
+      },
     });
     // The Interactions API has no temperature parameter; it must not leak in.
     expect(params).not.toHaveProperty("temperature");
