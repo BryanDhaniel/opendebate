@@ -50,8 +50,21 @@ export class DebateStore {
       }
       const filePath = path.join(this.dataDir, `${debate.id}.json`);
       const tempPath = `${filePath}.tmp`;
-      await writeFile(tempPath, JSON.stringify(debate, null, 2), "utf8");
-      await rename(tempPath, filePath);
+      const contents = JSON.stringify(debate, null, 2);
+      await writeFile(tempPath, contents, "utf8");
+      try {
+        await rename(tempPath, filePath);
+      } catch (renameError) {
+        // The atomic rename can fail under synced folders (e.g. OneDrive) or on
+        // transient lock races, surfacing as ENOENT/EPERM on the temp file.
+        // Fall back to a direct write so the debate is still persisted to disk
+        // rather than silently dropped.
+        console.warn(
+          `[store] atomic rename failed for ${debate.id}, writing directly:`,
+          renameError,
+        );
+        await writeFile(filePath, contents, "utf8");
+      }
     } catch (error) {
       console.error(`[store] failed to persist debate ${debate.id}:`, error);
     }
