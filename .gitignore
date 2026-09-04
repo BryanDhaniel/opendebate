@@ -46,3 +46,6 @@ data/
 #skills
 .agents
 skills-lock.json
+
+# agent workspace data (memory, skills, local config)
+.workbuddy-ai/
