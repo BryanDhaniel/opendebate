@@ -93,7 +93,7 @@ export function resolveProvider(
  */
 const DEFAULT_MODELS: Record<ProviderName, string> = {
   openai: "gpt-4o-mini",
-  gemini: "gemini-3.8-flash",
+  gemini: "gemini-3.5-flash-lite",
 };
 
 /** Resolves the model id for a role given its already-resolved provider. */
