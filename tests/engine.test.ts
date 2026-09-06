@@ -42,20 +42,20 @@ function scriptedDebater(options?: {
       };
     },
     async generateOpening(context: OpeningContext) {
-      return `Opening for ${context.position}`;
+      return `Opening for ${context.position}.`;
     },
     async generateRebuttal() {
       if (options?.failRebuttal) throw new Error("rebuttal service down");
-      return "Rebuttal content";
+      return "Rebuttal content.";
     },
     async generateQuestion() {
       return "Question content?";
     },
     async generateAnswer() {
-      return "Answer content";
+      return "Answer content.";
     },
     async generateClosing() {
-      return "Closing content";
+      return "Closing content.";
     },
   };
 }
@@ -289,5 +289,137 @@ describe("debate engine", () => {
     expect(events[events.length - 1].debate.error).toMatch(
       /invalid judge result/,
     );
+  });
+});
+
+/**
+ * Helpers and tests for the new `validateStageOutput()` guard: empty strings
+ * and outputs that don't end with terminal punctuation (i.e. truncated
+ * mid-sentence by `max_output_tokens`) must trigger `withRetry`, so the page
+ * never shows an empty or fragment bubble. Gemini 3 charges thinking tokens
+ * against the output budget, which previously let truncated content slip
+ * through silently.
+ */
+function sequencedDebater(): Debater & {
+  openings: string[];
+  rebuttals: string[];
+} {
+  const openings: string[] = [];
+  const rebuttals: string[] = [];
+  return {
+    openings,
+    rebuttals,
+    async research(context: ResearchContext) {
+      const hits = await context.search(`${context.position} evidence`);
+      return {
+        keyClaims: [`${context.position} claim`],
+        evidence: hits.map((h) => h.content),
+        sources: hits.map((h) => ({ ...h, relevance: "" })),
+        counterArguments: [],
+        uncertainties: [],
+      };
+    },
+    async generateOpening() {
+      const idx = openings.length;
+      openings.push(`Opening ${idx}.`);
+      return openings[openings.length - 1];
+    },
+    async generateRebuttal() {
+      const idx = rebuttals.length;
+      rebuttals.push(`Rebuttal ${idx}.`);
+      return rebuttals[rebuttals.length - 1];
+    },
+    async generateQuestion() {
+      return "Question content?";
+    },
+    async generateAnswer() {
+      return "Answer content.";
+    },
+    async generateClosing() {
+      return "Closing content.";
+    },
+  };
+}
+
+describe("debate engine output validation", () => {
+  it("retries and accepts valid output when the first attempt is empty", async () => {
+    const debater = sequencedDebater();
+    debater.generateOpening = async function () {
+      const idx = debater.openings.length;
+      debater.openings.push(idx === 0 ? "" : "Valid opening.");
+      return debater.openings[debater.openings.length - 1];
+    };
+    const { store, deps } = makeDeps({ createDebater: () => debater });
+    const debate = await store.create({ topic: TOPIC, debaterModel: "mock" });
+
+    const events = await runToCompletion(deps, debate.id);
+
+    expect(events[events.length - 1].type).toBe("debate_completed");
+    // A: empty (attempt 1) + "Valid opening." (attempt 2 after retry) = 2.
+    // B: "Valid opening." (attempt 1, no retry needed) = 1.
+    // Both debaters come from the same factory, so they share this counter.
+    expect(debater.openings).toHaveLength(3);
+    const final = events[events.length - 1].debate;
+    const openingA = final.transcript.find(
+      (m: DebateMessage) => m.speaker === "A" && m.kind === "opening",
+    );
+    expect(openingA?.content).toBe("Valid opening.");
+  });
+
+  it("retries and accepts valid output when the first attempt is truncated", async () => {
+    const debater = sequencedDebater();
+    debater.generateOpening = async function () {
+      const idx = debater.openings.length;
+      debater.openings.push(
+        idx === 0
+          ? "If autonomous cellular metabolism is"
+          : "Valid opening.",
+      );
+      return debater.openings[debater.openings.length - 1];
+    };
+    const { store, deps } = makeDeps({ createDebater: () => debater });
+    const debate = await store.create({ topic: TOPIC, debaterModel: "mock" });
+
+    const events = await runToCompletion(deps, debate.id);
+
+    expect(events[events.length - 1].type).toBe("debate_completed");
+    // Same shape as the empty-output case: A retries once, B succeeds first try.
+    expect(debater.openings).toHaveLength(3);
+  });
+
+  it("skips a non-critical stage when both attempts produce empty output", async () => {
+    const debater = sequencedDebater();
+    debater.generateRebuttal = async function () {
+      debater.rebuttals.push("");
+      return debater.rebuttals[debater.rebuttals.length - 1];
+    };
+    const { store, deps } = makeDeps({ createDebater: () => debater });
+    const debate = await store.create({ topic: TOPIC, debaterModel: "mock" });
+
+    const events = await runToCompletion(deps, debate.id);
+
+    const types = events.map((e) => e.type);
+    expect(types).toContain("stage_skipped");
+    expect(events[events.length - 1].type).toBe("debate_completed");
+    expect(debater.rebuttals).toHaveLength(4); // 2 speakers × 2 attempts
+    const final = events[events.length - 1].debate;
+    expect(
+      final.transcript.some((m: DebateMessage) => m.kind === "rebuttal"),
+    ).toBe(false);
+  });
+
+  it("marks the debate failed when a critical opening is empty twice in a row", async () => {
+    const debater = sequencedDebater();
+    debater.generateOpening = async function () {
+      debater.openings.push("");
+      return debater.openings[debater.openings.length - 1];
+    };
+    const { store, deps } = makeDeps({ createDebater: () => debater });
+    const debate = await store.create({ topic: TOPIC, debaterModel: "mock" });
+
+    const events = await runToCompletion(deps, debate.id);
+
+    expect(events[events.length - 1].type).toBe("debate_failed");
+    expect(events[events.length - 1].debate.error).toMatch(/empty opening_a/);
   });
 });

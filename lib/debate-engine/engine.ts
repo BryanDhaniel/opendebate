@@ -53,6 +53,26 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * Validates a stage's text output. We push only substantive output to the
+ * transcript: empty strings are obvious failures (Gemini occasionally returns
+ * none), and text without terminal punctuation has been truncated mid-sentence
+ * by `max_output_tokens` (typically because Gemini's thinking tokens ate the
+ * budget). Both surface as errors so `withRetry` kicks in before the message
+ * lands on the page.
+ */
+function validateStageOutput(text: string, stage: DebateStage): string {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error(`empty ${stage} output`);
+  }
+  const lastChar = trimmed[trimmed.length - 1];
+  if (lastChar !== "." && lastChar !== "!" && lastChar !== "?") {
+    throw new Error(`${stage} output truncated mid-sentence`);
+  }
+  return trimmed;
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise<T>((resolve) => {
     const timer = setTimeout(() => resolve(fallback), ms);
@@ -257,21 +277,21 @@ export class DebateRunner {
     await stage("opening_a", { critical: true }, async () => {
       const content = await debaterA.generateOpening({
         topic: debate.topic,
+        speaker: "A",
         position: "FOR",
         research: researchA,
       });
-      if (!content.trim()) throw new Error("empty opening statement");
-      this.pushMessage(debate, "A", "opening", "opening_a", content);
+      this.pushMessage(debate, "A", "opening", "opening_a", validateStageOutput(content, "opening_a"));
     });
 
     await stage("opening_b", { critical: true }, async () => {
       const content = await debaterB.generateOpening({
         topic: debate.topic,
+        speaker: "B",
         position: "AGAINST",
         research: researchB,
       });
-      if (!content.trim()) throw new Error("empty opening statement");
-      this.pushMessage(debate, "B", "opening", "opening_b", content);
+      this.pushMessage(debate, "B", "opening", "opening_b", validateStageOutput(content, "opening_b"));
     });
 
     await stage("rebuttal_a", { critical: false }, async () => {
@@ -283,11 +303,12 @@ export class DebateRunner {
       if (!opponentOpening) throw new Error("no opponent opening to rebut");
       const content = await debaterA.generateRebuttal({
         topic: debate.topic,
+        speaker: "A",
         position: "FOR",
         research: researchA,
         opponentOpening: opponentOpening.content,
       });
-      this.pushMessage(debate, "A", "rebuttal", "rebuttal_a", content);
+      this.pushMessage(debate, "A", "rebuttal", "rebuttal_a", validateStageOutput(content, "rebuttal_a"));
     });
 
     await stage("rebuttal_b", { critical: false }, async () => {
@@ -306,17 +327,19 @@ export class DebateRunner {
       );
       const content = await debaterB.generateRebuttal({
         topic: debate.topic,
+        speaker: "B",
         position: "AGAINST",
         research: researchB,
         opponentOpening: opponentOpening.content,
         opponentRebuttal: opponentRebuttal?.content,
       });
-      this.pushMessage(debate, "B", "rebuttal", "rebuttal_b", content);
+      this.pushMessage(debate, "B", "rebuttal", "rebuttal_b", validateStageOutput(content, "rebuttal_b"));
     });
 
     await stage("cross_examination_a", { critical: false }, async () => {
       const question = await debaterA.generateQuestion({
         topic: debate.topic,
+        speaker: "A",
         position: "FOR",
         research: researchA,
         transcript: transcriptText(),
@@ -326,21 +349,23 @@ export class DebateRunner {
         "A",
         "question",
         "cross_examination_a",
-        question,
+        validateStageOutput(question, "cross_examination_a"),
       );
       const answer = await debaterB.generateAnswer({
         topic: debate.topic,
+        speaker: "B",
         position: "AGAINST",
         research: researchB,
         question,
         transcript: transcriptText(),
       });
-      this.pushMessage(debate, "B", "answer", "cross_examination_a", answer);
+      this.pushMessage(debate, "B", "answer", "cross_examination_a", validateStageOutput(answer, "cross_examination_a"));
     });
 
     await stage("cross_examination_b", { critical: false }, async () => {
       const question = await debaterB.generateQuestion({
         topic: debate.topic,
+        speaker: "B",
         position: "AGAINST",
         research: researchB,
         transcript: transcriptText(),
@@ -350,36 +375,39 @@ export class DebateRunner {
         "B",
         "question",
         "cross_examination_b",
-        question,
+        validateStageOutput(question, "cross_examination_b"),
       );
       const answer = await debaterA.generateAnswer({
         topic: debate.topic,
+        speaker: "A",
         position: "FOR",
         research: researchA,
         question,
         transcript: transcriptText(),
       });
-      this.pushMessage(debate, "A", "answer", "cross_examination_b", answer);
+      this.pushMessage(debate, "A", "answer", "cross_examination_b", validateStageOutput(answer, "cross_examination_b"));
     });
 
     await stage("closing_a", { critical: false }, async () => {
       const content = await debaterA.generateClosing({
         topic: debate.topic,
+        speaker: "A",
         position: "FOR",
         research: researchA,
         transcript: transcriptText(),
       });
-      this.pushMessage(debate, "A", "closing", "closing_a", content);
+      this.pushMessage(debate, "A", "closing", "closing_a", validateStageOutput(content, "closing_a"));
     });
 
     await stage("closing_b", { critical: false }, async () => {
       const content = await debaterB.generateClosing({
         topic: debate.topic,
+        speaker: "B",
         position: "AGAINST",
         research: researchB,
         transcript: transcriptText(),
       });
-      this.pushMessage(debate, "B", "closing", "closing_b", content);
+      this.pushMessage(debate, "B", "closing", "closing_b", validateStageOutput(content, "closing_b"));
     });
 
     await stage("judging", { critical: true }, async () => {

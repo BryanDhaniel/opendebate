@@ -46,7 +46,10 @@ export class AiDebater implements Debater {
     return {
       maxOutputTokens,
       timeoutMs: LIMITS.aiCallTimeoutMs,
-      temperature: 0.4,
+      // Higher than 0.4 (which produced near-deterministic mirror-image
+      // phrasing between A and B). 0.7 keeps the prose disciplined while
+      // letting each side develop its own voice. Gemini ignores this field.
+      temperature: 0.7,
     };
   }
 
@@ -117,11 +120,12 @@ Excerpt: ${truncate(hit.content, LIMITS.maxContentCharsPerSource)}`,
 
   async generateOpening(context: OpeningContext): Promise<string> {
     const result = await this.provider.generateText({
-      ...openingPrompt(
-        context.topic,
-        context.position,
-        formatResearchSummary(context.research),
-      ),
+      ...openingPrompt({
+        topic: context.topic,
+        position: context.position,
+        speaker: context.speaker,
+        researchSummary: formatResearchSummary(context.research),
+      }),
       ...this.callOptions(TOKEN_LIMITS.opening),
     });
     return result.text.trim();
@@ -132,6 +136,7 @@ Excerpt: ${truncate(hit.content, LIMITS.maxContentCharsPerSource)}`,
       ...rebuttalPrompt({
         topic: context.topic,
         position: context.position,
+        speaker: context.speaker,
         researchSummary: formatResearchSummary(context.research),
         opponentOpening: context.opponentOpening,
         opponentRebuttal: context.opponentRebuttal,
@@ -146,6 +151,7 @@ Excerpt: ${truncate(hit.content, LIMITS.maxContentCharsPerSource)}`,
       ...questionPrompt({
         topic: context.topic,
         position: context.position,
+        speaker: context.speaker,
         transcript: context.transcript,
       }),
       ...this.callOptions(TOKEN_LIMITS.question),
@@ -158,6 +164,7 @@ Excerpt: ${truncate(hit.content, LIMITS.maxContentCharsPerSource)}`,
       ...answerPrompt({
         topic: context.topic,
         position: context.position,
+        speaker: context.speaker,
         researchSummary: formatResearchSummary(context.research),
         question: context.question ?? "",
       }),
@@ -171,6 +178,7 @@ Excerpt: ${truncate(hit.content, LIMITS.maxContentCharsPerSource)}`,
       ...closingPrompt({
         topic: context.topic,
         position: context.position,
+        speaker: context.speaker,
         researchSummary: formatResearchSummary(context.research),
         transcript: context.transcript,
       }),

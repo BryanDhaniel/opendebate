@@ -37,12 +37,14 @@ export interface ResearchContext {
 
 export interface OpeningContext {
   topic: string;
+  speaker: Speaker;
   position: Position;
   research: ResearchResult;
 }
 
 export interface RebuttalContext {
   topic: string;
+  speaker: Speaker;
   position: Position;
   research: ResearchResult;
   opponentOpening: string;
@@ -51,6 +53,7 @@ export interface RebuttalContext {
 
 export interface CrossExaminationContext {
   topic: string;
+  speaker: Speaker;
   position: Position;
   research: ResearchResult;
   question?: string;
@@ -59,6 +62,7 @@ export interface CrossExaminationContext {
 
 export interface ClosingContext {
   topic: string;
+  speaker: Speaker;
   position: Position;
   research: ResearchResult;
   transcript: string;

@@ -21,16 +21,21 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 // targets that shape the prose live in `lib/prompts/debater.ts`. At roughly
 // 0.75 words per token: opening ~450 words, rebuttal ~375, answer ~300,
 // closing ~340. Cross-examination questions stay short by design (one question).
-// NOTE: on Gemini, thinking tokens are charged against these budgets — see the
-// `thinking_level` note in lib/ai/google-provider.ts.
+//
+// The caps include generous headroom over the upper word target because Gemini
+// 3 charges its internal *thinking* tokens against `max_output_tokens`. Even
+// at `thinking_level: "low"`, the model can burn 100–200 tokens reasoning
+// before producing the visible reply; with a too-tight cap (e.g. question =
+// 120) the visible output comes back near-empty or truncated mid-sentence.
+// See `thinking_level` note in lib/ai/google-provider.ts.
 export const TOKEN_LIMITS = {
   researchQueries: 400,
   researchSynthesis: 1600,
-  opening: 600,
-  rebuttal: 500,
-  question: 120,
-  answer: 400,
-  closing: 450,
+  opening: 900,
+  rebuttal: 700,
+  question: 300,
+  answer: 650,
+  closing: 750,
   judge: 2000,
 } as const;
 
