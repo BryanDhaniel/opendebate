@@ -1,6 +1,7 @@
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { LIMITS } from "../config";
 import type { Debate, DebaterInfo, Speaker } from "../domain/types";
 import { isTerminal } from "../domain/state-machine";
 
@@ -17,6 +18,10 @@ export class DebateStore {
   constructor(private dataDir: string) {}
 
   async create(input: CreateDebateInput): Promise<Debate> {
+    // Drop any idle debates that have sat unstarted past the TTL before we
+    // count the new one against the active cap (REVIEW C2: abandoned idle
+    // creations must not wedge the API into a permanent 429).
+    this.sweepIdle();
     const debaterA: DebaterInfo = { position: "FOR", model: input.debaterModel };
     const debaterB: DebaterInfo = {
       position: "AGAINST",
@@ -39,6 +44,22 @@ export class DebateStore {
 
   get(id: string): Debate | undefined {
     return this.debates.get(id);
+  }
+
+  /**
+   * Removes a debate from the store entirely. Used to reclaim an `idle` debate
+   * whose stream was opened then immediately closed (the client abandoned it
+   * before the engine moved it off `idle`), and by `sweepIdle` for TTL expiry.
+   * Only call this for debates that are not mid-run — removing a running debate
+   * would orphan the engine's background `run()`.
+   */
+  delete(id: string): void {
+    this.debates.delete(id);
+    const filePath = path.join(this.dataDir, `${id}.json`);
+    void unlink(filePath).catch(() => {
+      // File may not exist (disk-lite persistence) or be mid-write; the in-memory
+      // removal is what matters for the active-count cap.
+    });
   }
 
   async save(debate: Debate): Promise<void> {
@@ -71,11 +92,30 @@ export class DebateStore {
   }
 
   activeCount(): number {
+    this.sweepIdle();
     let count = 0;
     for (const debate of this.debates.values()) {
       if (!isTerminal(debate.stage)) count++;
     }
     return count;
+  }
+
+  /**
+   * Reclaims `idle` debates that were created but never started within
+   * `LIMITS.idleTtlMs`. A debate only leaves `idle` when its stream is opened,
+   * so an abandoned POST (closed tab, network blip, probing bot) would otherwise
+   * occupy a slot forever and, once enough accumulate, trip the permanent 429 in
+   * POST /api/debates. Sweeping on access keeps the cap self-healing.
+   */
+  private sweepIdle(): void {
+    const cutoff = Date.now() - LIMITS.idleTtlMs;
+    for (const debate of this.debates.values()) {
+      if (debate.stage !== "idle") continue;
+      const created = Date.parse(debate.createdAt);
+      if (Number.isFinite(created) && created <= cutoff) {
+        this.delete(debate.id);
+      }
+    }
   }
 
   speakerOf(debate: Debate, speaker: Speaker): DebaterInfo {

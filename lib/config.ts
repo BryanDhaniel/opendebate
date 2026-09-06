@@ -43,6 +43,18 @@ export const LIMITS = {
   topicMinLength: TOPIC_MIN_LENGTH,
   topicMaxLength: TOPIC_MAX_LENGTH,
   maxActiveDebates: positiveInt(process.env.MAX_ACTIVE_DEBATES, 5),
+  // Idle debates that were created via POST /api/debates but whose stream was
+  // never opened leak a slot forever (see REVIEW.md C2): they never leave
+  // "idle", so activeCount() keeps counting them and five abandoned creates
+  // wedge the API into a permanent 429. Idle debates older than this are
+  // swept from the store on the next count/create.
+  idleTtlMs: positiveInt(process.env.IDLE_TTL_MS, 10 * 60_000),
+  // Creation rate limits for POST /api/debates (REVIEW.md C1). Each creation
+  // triggers paid LLM work, so we cap how many can start per window — globally
+  // and per client IP — in addition to the concurrency cap.
+  rateLimitWindowMs: positiveInt(process.env.RATE_LIMIT_WINDOW_MS, 60_000),
+  maxCreatesPerIp: positiveInt(process.env.MAX_CREATES_PER_IP, 5),
+  maxCreatesGlobal: positiveInt(process.env.MAX_CREATES_GLOBAL, 20),
   aiCallTimeoutMs: 90_000,
   judgeTimeoutMs: 180_000,
   searchTimeoutMs: 15_000,

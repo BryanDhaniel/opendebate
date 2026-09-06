@@ -115,6 +115,13 @@ export async function GET(
       }, HEARTBEAT_MS);
 
       request.signal.addEventListener("abort", () => {
+        // If the client abandoned the stream before the engine moved the debate
+        // off "idle", reclaim the slot now instead of waiting for the idle TTL
+        // (REVIEW C2). A debate already running past idle is left alone — the
+        // engine's background run owns it and would just re-persist it.
+        if (debate.stage === "idle") {
+          app.store.delete(id);
+        }
         close();
       });
     },

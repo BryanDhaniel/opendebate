@@ -1,11 +1,39 @@
 import { getRuntime, MissingConfigError } from "@/lib/debate-engine/runtime";
 import { LIMITS, MODELS } from "@/lib/config";
 import { sanitizeTopic } from "@/lib/validation";
+import { creationRateLimiter, clientIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  // REVIEW C1: an unauthenticated POST triggers paid LLM work. Guard it with an
+  // opt-in shared secret (set OPENDABATE_API_KEY to require it) and a creation
+  // rate limit (per-IP + global). Both run before any provider/config touch.
+  const apiKey = process.env.OPENDABATE_API_KEY;
+  if (apiKey) {
+    const header = request.headers.get("authorization");
+    const provided =
+      header?.startsWith("Bearer ") ? header.slice(7) : request.headers.get("x-api-key");
+    if (provided !== apiKey) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
+  const decision = creationRateLimiter.check(clientIp(request));
+  if (!decision.allowed) {
+    return new Response(
+      JSON.stringify({ error: "Too many debates created. Try again shortly." }),
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(decision.retryAfterMs / 1000)),
+          "X-RateLimit-Limit": String(decision.limit),
+        },
+      },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
