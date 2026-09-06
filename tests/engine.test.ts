@@ -387,6 +387,52 @@ describe("debate engine output validation", () => {
     expect(debater.openings).toHaveLength(3);
   });
 
+  it("accepts output ending in a trailing quotation mark (no false truncation retry)", async () => {
+    const debater = sequencedDebater();
+    debater.generateOpening = async function () {
+      const idx = debater.openings.length;
+      debater.openings.push(
+        idx === 0
+          ? 'The evidence makes the case clear."'
+          : 'The opposition has not met its burden."',
+      );
+      return debater.openings[debater.openings.length - 1];
+    };
+    const { store, deps } = makeDeps({ createDebater: () => debater });
+    const debate = await store.create({ topic: TOPIC, debaterModel: "mock" });
+
+    const events = await runToCompletion(deps, debate.id);
+
+    expect(events[events.length - 1].type).toBe("debate_completed");
+    // Both openings are well-formed (they merely end with a quote), so neither
+    // should trigger the retry → exactly 2 generations total (A then B).
+    expect(debater.openings).toHaveLength(2);
+    const final = events[events.length - 1].debate;
+    const openingA = final.transcript.find(
+      (m: DebateMessage) => m.speaker === "A" && m.kind === "opening",
+    );
+    // The original text (closing quote intact) is what gets displayed.
+    expect(openingA?.content).toBe('The evidence makes the case clear."');
+  });
+
+  it("accepts output ending in a trailing bracket or parenthesis (no false retry)", async () => {
+    const debater = sequencedDebater();
+    debater.generateOpening = async function () {
+      const idx = debater.openings.length;
+      debater.openings.push(
+        idx === 0 ? "The trend is unambiguous)." : "The claim does not hold].",
+      );
+      return debater.openings[debater.openings.length - 1];
+    };
+    const { store, deps } = makeDeps({ createDebater: () => debater });
+    const debate = await store.create({ topic: TOPIC, debaterModel: "mock" });
+
+    const events = await runToCompletion(deps, debate.id);
+
+    expect(events[events.length - 1].type).toBe("debate_completed");
+    expect(debater.openings).toHaveLength(2);
+  });
+
   it("skips a non-critical stage when both attempts produce empty output", async () => {
     const debater = sequencedDebater();
     debater.generateRebuttal = async function () {

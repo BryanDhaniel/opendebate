@@ -5,6 +5,11 @@ import { LIMITS } from "../config";
 import type { Debate, DebaterInfo, Speaker } from "../domain/types";
 import { isTerminal } from "../domain/state-machine";
 
+// OneDrive (and other sync clients) lock the temp file written for the atomic
+// rename, so save() falls back to a direct write. We only warn about the
+// fallback once per process — otherwise it spams the console on every save.
+let renameFallbackWarned = false;
+
 export interface CreateDebateInput {
   topic: string;
   debaterModel: string;
@@ -80,11 +85,18 @@ export class DebateStore {
         // transient lock races, surfacing as ENOENT/EPERM on the temp file.
         // Fall back to a direct write so the debate is still persisted to disk
         // rather than silently dropped.
-        console.warn(
-          `[store] atomic rename failed for ${debate.id}, writing directly:`,
-          renameError,
-        );
+        if (!renameFallbackWarned) {
+          renameFallbackWarned = true;
+          console.warn(
+            `[store] atomic rename unavailable (likely a synced folder like OneDrive); ` +
+              `falling back to direct writes for this session:`,
+            (renameError as Error)?.message ?? renameError,
+          );
+        }
         await writeFile(filePath, contents, "utf8");
+        // The rename left an orphaned temp file behind; clean it up so it does
+        // not accumulate under the synced folder.
+        await unlink(tempPath).catch(() => {});
       }
     } catch (error) {
       console.error(`[store] failed to persist debate ${debate.id}:`, error);

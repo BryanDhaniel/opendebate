@@ -66,7 +66,16 @@ function validateStageOutput(text: string, stage: DebateStage): string {
   if (!trimmed) {
     throw new Error(`empty ${stage} output`);
   }
-  const lastChar = trimmed[trimmed.length - 1];
+  // A trailing quotation mark or closing bracket is not "mid-sentence": models
+  // legitimately end a paragraph with a cited quote ("…as the data shows.") or a
+  // parenthetical. Treating that as truncation forces a retry that re-runs a paid
+  // LLM generation for no reason. Validate the punctuation on a copy with the
+  // trailing noise removed, but return the original text (quote intact) for display.
+  const check = trimmed.replace(/["'”’)\]]$/, "");
+  if (!check) {
+    throw new Error(`empty ${stage} output`);
+  }
+  const lastChar = check[check.length - 1];
   if (lastChar !== "." && lastChar !== "!" && lastChar !== "?") {
     throw new Error(`${stage} output truncated mid-sentence`);
   }
