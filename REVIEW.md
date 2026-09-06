@@ -10,10 +10,11 @@ client/server split, a genuinely considered accessibility layer, and a domain
 model that is well separated from the AI plumbing. Typecheck, lint and the full
 test suite all pass.
 
-The findings below are not stylistic. The two **Critical** items are the ones
-that matter if this ever leaves localhost: the API is unauthenticated and
+The findings below are not stylistic. The two **Critical** items were the ones
+that matter if this ever leaves localhost: the API was unauthenticated and
 triggers paid LLM work, and the in-memory store leaks slots permanently, which
 can wedge the app into a permanent 429 with only five abandoned requests.
+**Both Critical items (C1, C2) are now RESOLVED — see the per-item notes.**
 
 ---
 
@@ -23,7 +24,7 @@ can wedge the app into a permanent 429 with only five abandoned requests.
 | --- | --- |
 | `npx tsc --noEmit` | **0 errors** |
 | `npx eslint .` | **0 problems** |
-| `npx vitest run` | **6 files, 53 tests, all passing** |
+| `npx vitest run` | **9 files, 83 tests, all passing** |
 | `next dev` + `curl /` | **HTTP 200**, all expected copy rendered, no runtime errors |
 
 **Note on `npm run build`:** it cannot complete in this sandbox. Next's Turbopack
@@ -65,16 +66,16 @@ reproduce. All 6 files now run together in ~2s.
 
 ## Critical
 
-### C1 — Unauthenticated API triggers paid LLM work
+### C1 — Unauthenticated API triggers paid LLM work — **[RESOLVED in 77a8023]**
 
 `app/api/debates/route.ts`, `app/api/debates/[id]/stream/route.ts`
 
-`POST /api/debates` has no authentication and no per-client rate limit. Anyone
-who can reach the deployment can start a debate, and each one costs roughly two
-research rounds (each up to 5 Tavily searches + 2 LLM calls), ten generation
+`POST /api/debates` had no authentication and no per-client rate limit. Anyone
+who could reach the deployment could start a debate, and each one costs roughly
+two research rounds (each up to 5 Tavily searches + 2 LLM calls), ten generation
 calls, and one judge call.
 
-The only guard is:
+The only guard was:
 
 ```ts
 if (app.store.activeCount() >= LIMITS.maxActiveDebates) return 429
@@ -82,28 +83,38 @@ if (app.store.activeCount() >= LIMITS.maxActiveDebates) return 429
 
 That is a **concurrency** limiter, not a rate limiter. It caps how many debates
 run at once; it does nothing about how many run in total. A trivial loop script
-can drain an OpenAI budget continuously.
+could drain an OpenAI budget continuously.
 
-**Fix:** authenticate requests, add a per-IP/per-session rate limit, and enforce
-a hard spend cap. The concurrency cap is worth keeping *in addition*, not instead.
+**Fix (landed):** `POST` now (a) requires a shared-secret bearer token when
+`OPENDABATE_API_KEY` is set (`Authorization: Bearer` or `x-api-key`), and
+(b) enforces per-IP + global sliding-window creation limits via
+`lib/server/rate-limit.ts` (429 + `Retry-After` + `X-RateLimit-Limit`) before
+any body parse or provider touch. The concurrency cap is kept *in addition*.
+Defaults: 5 creates/IP and 20 global per 60s, all tunable via env. No hard
+spend cap yet (see open follow-up below).
 
-### C2 — In-memory store leaks slots permanently
+### C2 — In-memory store leaks slots permanently — **[RESOLVED in 77a8023]**
 
 `lib/debate-engine/store.ts`
 
-`DebateStore.debates` is a plain `Map` with no eviction. `create()` inserts a
+`DebateStore.debates` was a plain `Map` with no eviction. `create()` inserts a
 debate at stage `"idle"` and the route returns 201. The debate only leaves
 `"idle"` when someone opens `/api/debates/:id/stream` and `startIfIdle` fires.
 
-If the client never opens the stream — closes the tab, network blip, a bot
-probing the endpoint — that debate stays `"idle"` forever. `"idle"` is not
-terminal, so `activeCount()` counts it forever. **Five abandoned creations wedge
+If the client never opened the stream — closed the tab, network blip, a bot
+probing the endpoint — that debate stayed `"idle"` forever. `"idle"` is not
+terminal, so `activeCount()` counted it forever. **Five abandoned creations wedged
 the endpoint into a permanent 429 for every user until the process restarts.**
-There is no TTL, no reaper, and no DELETE endpoint.
+There was no TTL, no reaper, and no DELETE endpoint.
 
-`data/debates/*.json` grows without bound for the same reason (see S3).
+`data/debates/*.json` grew without bound for the same reason (see S3).
 
-**Fix:** give `idle` debates a TTL and sweep them; and/or delete on stream close.
+**Fix (landed):** `DebateStore` gained a `sweepIdle()` that drops `"idle"`
+debates older than `LIMITS.idleTtlMs` (default 10 min), called by both
+`create()` and `activeCount()` so the active-cap self-heals. A new `delete(id)`
+removes the in-memory entry and best-effort `unlink`s its JSON. The stream route
+also calls `delete(id)` on abort when the debate is still `"idle"`, reclaiming
+the slot immediately instead of waiting for the TTL.
 
 ---
 
