@@ -85,12 +85,15 @@ function requestOptions(timeoutMs?: number) {
 /**
  * Builds the generation config shared by both call shapes.
  *
- * `thinking_level` is the important one: Gemini 3 models reason before
- * replying, and those thinking tokens are charged against
- * `max_output_tokens`. Left at the default, a 600-token opening budget can
- * come back nearly empty because the model spent it on internal reasoning.
- * "low" keeps some deliberation while reserving the budget for the prose the
- * audience actually reads.
+ * `thinking_level` is the important one: Gemini models reason before replying,
+ * and those thinking tokens are charged against `max_output_tokens`. We use
+ * "minimal" — the lowest level the SDK exposes ("minimal" | "low" | "medium" |
+ * "high") — because even at "low", a Gemini 3.5 flash-lite debater can burn
+ * enough of the output budget on reasoning that a 380-450-word opening gets
+ * cut off mid-sentence and the critical stage hard-fails the debate. "minimal"
+ * keeps deliberation light and reserves the budget for the prose the audience
+ * actually reads. (For Gemini 3.5+, thinking_level is the ONLY supported
+ * thinking control — the old thinking_budget errors if set.)
  *
  * `temperature` is deliberately not forwarded — the Interactions API has no
  * such parameter, so passing one is a type error on GenerationConfig. We still
@@ -99,7 +102,7 @@ function requestOptions(timeoutMs?: number) {
 function generationConfig(input: { maxOutputTokens?: number }) {
   return {
     max_output_tokens: input.maxOutputTokens,
-    thinking_level: "low",
+    thinking_level: "minimal",
   };
 }
 

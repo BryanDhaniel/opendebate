@@ -77,6 +77,14 @@ function validateStageOutput(text: string, stage: DebateStage): string {
   }
   const lastChar = check[check.length - 1];
   if (lastChar !== "." && lastChar !== "!" && lastChar !== "?") {
+    // Ground truth for diagnosis: log the length and the exact tail of the
+    // rejected text so a repeat failure shows whether the model was cut off by
+    // the token ceiling (long text, stops mid-word) or ended with a non-terminal
+    // character (short text, odd ending) — the fixes are different.
+    console.warn(
+      `[engine] ${stage} failed terminal-punctuation check ` +
+        `(len=${trimmed.length}, tail=${JSON.stringify(trimmed.slice(-80))})`,
+    );
     throw new Error(`${stage} output truncated mid-sentence`);
   }
   return trimmed;

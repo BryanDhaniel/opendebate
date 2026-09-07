@@ -52,9 +52,9 @@ describe("GoogleProvider", () => {
       system_instruction: "be concise",
       generation_config: {
         max_output_tokens: 123,
-        // Thinking tokens are charged against max_output_tokens, so reasoning
-        // must stay light or the visible reply gets starved.
-        thinking_level: "low",
+        // Thinking tokens are charged against max_output_tokens; "minimal" is
+        // the lowest level and keeps the budget for the visible reply.
+        thinking_level: "minimal",
       },
     });
     // The Interactions API has no temperature parameter; it must not leak in.
