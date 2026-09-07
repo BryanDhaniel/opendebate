@@ -34,7 +34,7 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 export const TOKEN_LIMITS = {
   researchQueries: 400,
   researchSynthesis: 1600,
-  opening: 1200,
+  opening: 1500,
   rebuttal: 1100,
   question: 500,
   answer: 1000,
