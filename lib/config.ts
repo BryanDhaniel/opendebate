@@ -19,23 +19,26 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 
 // Per-stage output budgets. These are hard ceilings, not targets — the word
 // targets that shape the prose live in `lib/prompts/debater.ts`. At roughly
-// 0.75 words per token: opening ~450 words, rebuttal ~375, answer ~300,
-// closing ~340. Cross-examination questions stay short by design (one question).
+// Token ceilings per generation stage — these are the HARD `max_output_tokens`
+// caps. Gemini 3 charges its internal *thinking* tokens against the same
+// budget, so the visible prose must fit inside (ceiling − thinking).
 //
-// The caps include generous headroom over the upper word target because Gemini
-// 3 charges its internal *thinking* tokens against `max_output_tokens`. Even
-// at `thinking_level: "low"`, the model can burn 100–200 tokens reasoning
-// before producing the visible reply; with a too-tight cap (e.g. question =
-// 120) the visible output comes back near-empty or truncated mid-sentence.
-// See `thinking_level` note in lib/ai/google-provider.ts.
+// Word targets that actually drive length live in lib/prompts/debater.ts
+// (~ upper target ÷ 0.75 words-per-token). The ceilings below carry generous
+// headroom over the upper word target so a ~300-token thinking budget (even at
+// `thinking_level: "low"`) plus mild rambling never causes a mid-sentence
+// truncation. They were raised after a real failure: the opening (the critical
+// stage) truncated on both retries and failed the whole debate, because its
+// 900-token ceiling left no room for thinking tokens. See `validateStageOutput`
+// plus `withRetry` in lib/debate-engine/engine.ts.
 export const TOKEN_LIMITS = {
   researchQueries: 400,
   researchSynthesis: 1600,
-  opening: 900,
-  rebuttal: 700,
-  question: 300,
-  answer: 650,
-  closing: 750,
+  opening: 1200,
+  rebuttal: 1100,
+  question: 500,
+  answer: 1000,
+  closing: 1050,
   judge: 2000,
 } as const;
 
