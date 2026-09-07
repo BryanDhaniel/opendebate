@@ -26,11 +26,11 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 // Word targets that actually drive length live in lib/prompts/debater.ts
 // (~ upper target ÷ 0.75 words-per-token). The ceilings below carry generous
 // headroom over the upper word target so a ~300-token thinking budget (even at
-// `thinking_level: "low"`) plus mild rambling never causes a mid-sentence
+// `thinking_level: "minimal"`) plus mild rambling never causes a mid-sentence
 // truncation. They were raised after a real failure: the opening (the critical
 // stage) truncated on both retries and failed the whole debate, because its
-// 900-token ceiling left no room for thinking tokens. See `validateStageOutput`
-// plus `withRetry` in lib/debate-engine/engine.ts.
+// 900-token ceiling left no room for thinking tokens. See `guardStageOutput`
+// plus `withRetry` in lib/debate-engine/stage-guard.ts.
 export const TOKEN_LIMITS = {
   researchQueries: 400,
   researchSynthesis: 1600,

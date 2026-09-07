@@ -293,7 +293,7 @@ describe("debate engine", () => {
 });
 
 /**
- * Helpers and tests for the new `validateStageOutput()` guard: empty strings
+ * Helpers and tests for the StageGuard policy (`guardStageOutput`): empty strings
  * and outputs that don't end with terminal punctuation (i.e. truncated
  * mid-sentence by `max_output_tokens`) must trigger `withRetry`, so the page
  * never shows an empty or fragment bubble. Gemini 3 charges thinking tokens

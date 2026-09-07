@@ -160,6 +160,13 @@ error, a bad model name) fail identically twice, doubling cost for no benefit.
 
 **Fix:** exponential backoff with jitter, and retry only on retryable errors.
 
+*Partial — 2026-09-08:* the retry policy was extracted out of `engine.ts` into
+`lib/debate-engine/stage-guard.ts` (alongside `guardStageOutput`), so it is now
+isolated and directly unit-testable (`tests/stage-guard.test.ts`). This is the
+first, mechanical step — the *behavioral* fix (backoff + retry-on-retryable-only)
+is still TODO. Having the policy in one place makes that follow-up a one-function
+change.
+
 ### I3 — SSE frames are O(n²) in transcript size
 
 `lib/debate-engine/engine.ts:38`, `emit()`

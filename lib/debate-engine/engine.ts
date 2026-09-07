@@ -16,6 +16,7 @@ import type { ResearchTool, SearchFn } from "../research/types";
 import { formatTranscript, lastMessageOfKind } from "../ai/transcript";
 import type { DebateBus } from "./bus";
 import type { DebateStore } from "./store";
+import { guardStageOutput, withRetry } from "./stage-guard";
 
 class DebateAbortedError extends Error {}
 
@@ -51,43 +52,6 @@ function emptyResearch(note: string): ResearchResult {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/**
- * Validates a stage's text output. We push only substantive output to the
- * transcript: empty strings are obvious failures (Gemini occasionally returns
- * none), and text without terminal punctuation has been truncated mid-sentence
- * by `max_output_tokens` (typically because Gemini's thinking tokens ate the
- * budget). Both surface as errors so `withRetry` kicks in before the message
- * lands on the page.
- */
-function validateStageOutput(text: string, stage: DebateStage): string {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    throw new Error(`empty ${stage} output`);
-  }
-  // A trailing quotation mark or closing bracket is not "mid-sentence": models
-  // legitimately end a paragraph with a cited quote ("…as the data shows.") or a
-  // parenthetical. Treating that as truncation forces a retry that re-runs a paid
-  // LLM generation for no reason. Validate the punctuation on a copy with the
-  // trailing noise removed, but return the original text (quote intact) for display.
-  const check = trimmed.replace(/["'”’)\]]$/, "");
-  if (!check) {
-    throw new Error(`empty ${stage} output`);
-  }
-  const lastChar = check[check.length - 1];
-  if (lastChar !== "." && lastChar !== "!" && lastChar !== "?") {
-    // Ground truth for diagnosis: log the length and the exact tail of the
-    // rejected text so a repeat failure shows whether the model was cut off by
-    // the token ceiling (long text, stops mid-word) or ended with a non-terminal
-    // character (short text, odd ending) — the fixes are different.
-    console.warn(
-      `[engine] ${stage} failed terminal-punctuation check ` +
-        `(len=${trimmed.length}, tail=${JSON.stringify(trimmed.slice(-80))})`,
-    );
-    throw new Error(`${stage} output truncated mid-sentence`);
-  }
-  return trimmed;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -211,6 +175,22 @@ export class DebateRunner {
     debate.transcript.push(message);
   }
 
+  /**
+   * Appends a debater's stage output to the transcript after validating it.
+   * Output that is empty or truncated mid-sentence (Gemini's thinking tokens ate
+   * the output budget) throws, so the surrounding `stage()` retries the
+   * generation instead of letting a fragment reach the page.
+   */
+  private record(
+    debate: Debate,
+    speaker: Speaker,
+    kind: MessageKind,
+    stage: DebateStage,
+    content: string,
+  ): void {
+    this.pushMessage(debate, speaker, kind, stage, guardStageOutput(content, stage));
+  }
+
   private async run(debate: Debate): Promise<void> {
     const budget = this.deps.budget ?? DEFAULT_RESEARCH_BUDGET;
     const debaterA = this.deps.createDebater();
@@ -298,7 +278,7 @@ export class DebateRunner {
         position: "FOR",
         research: researchA,
       });
-      this.pushMessage(debate, "A", "opening", "opening_a", validateStageOutput(content, "opening_a"));
+      this.record(debate, "A", "opening", "opening_a", content);
     });
 
     await stage("opening_b", { critical: true }, async () => {
@@ -308,7 +288,7 @@ export class DebateRunner {
         position: "AGAINST",
         research: researchB,
       });
-      this.pushMessage(debate, "B", "opening", "opening_b", validateStageOutput(content, "opening_b"));
+      this.record(debate, "B", "opening", "opening_b", content);
     });
 
     await stage("rebuttal_a", { critical: false }, async () => {
@@ -325,7 +305,7 @@ export class DebateRunner {
         research: researchA,
         opponentOpening: opponentOpening.content,
       });
-      this.pushMessage(debate, "A", "rebuttal", "rebuttal_a", validateStageOutput(content, "rebuttal_a"));
+      this.record(debate, "A", "rebuttal", "rebuttal_a", content);
     });
 
     await stage("rebuttal_b", { critical: false }, async () => {
@@ -350,7 +330,7 @@ export class DebateRunner {
         opponentOpening: opponentOpening.content,
         opponentRebuttal: opponentRebuttal?.content,
       });
-      this.pushMessage(debate, "B", "rebuttal", "rebuttal_b", validateStageOutput(content, "rebuttal_b"));
+      this.record(debate, "B", "rebuttal", "rebuttal_b", content);
     });
 
     await stage("cross_examination_a", { critical: false }, async () => {
@@ -361,13 +341,7 @@ export class DebateRunner {
         research: researchA,
         transcript: transcriptText(),
       });
-      this.pushMessage(
-        debate,
-        "A",
-        "question",
-        "cross_examination_a",
-        validateStageOutput(question, "cross_examination_a"),
-      );
+      this.record(debate, "A", "question", "cross_examination_a", question);
       const answer = await debaterB.generateAnswer({
         topic: debate.topic,
         speaker: "B",
@@ -376,7 +350,7 @@ export class DebateRunner {
         question,
         transcript: transcriptText(),
       });
-      this.pushMessage(debate, "B", "answer", "cross_examination_a", validateStageOutput(answer, "cross_examination_a"));
+      this.record(debate, "B", "answer", "cross_examination_a", answer);
     });
 
     await stage("cross_examination_b", { critical: false }, async () => {
@@ -387,13 +361,7 @@ export class DebateRunner {
         research: researchB,
         transcript: transcriptText(),
       });
-      this.pushMessage(
-        debate,
-        "B",
-        "question",
-        "cross_examination_b",
-        validateStageOutput(question, "cross_examination_b"),
-      );
+      this.record(debate, "B", "question", "cross_examination_b", question);
       const answer = await debaterA.generateAnswer({
         topic: debate.topic,
         speaker: "A",
@@ -402,7 +370,7 @@ export class DebateRunner {
         question,
         transcript: transcriptText(),
       });
-      this.pushMessage(debate, "A", "answer", "cross_examination_b", validateStageOutput(answer, "cross_examination_b"));
+      this.record(debate, "A", "answer", "cross_examination_b", answer);
     });
 
     await stage("closing_a", { critical: false }, async () => {
@@ -413,7 +381,7 @@ export class DebateRunner {
         research: researchA,
         transcript: transcriptText(),
       });
-      this.pushMessage(debate, "A", "closing", "closing_a", validateStageOutput(content, "closing_a"));
+      this.record(debate, "A", "closing", "closing_a", content);
     });
 
     await stage("closing_b", { critical: false }, async () => {
@@ -424,7 +392,7 @@ export class DebateRunner {
         research: researchB,
         transcript: transcriptText(),
       });
-      this.pushMessage(debate, "B", "closing", "closing_b", validateStageOutput(content, "closing_b"));
+      this.record(debate, "B", "closing", "closing_b", content);
     });
 
     await stage("judging", { critical: true }, async () => {
@@ -467,14 +435,5 @@ export class DebateRunner {
         return [];
       }
     };
-  }
-}
-
-async function withRetry(fn: () => Promise<void>): Promise<void> {
-  try {
-    await fn();
-  } catch (error) {
-    console.warn("[engine] stage failed once, retrying:", errorMessage(error));
-    await fn();
   }
 }
