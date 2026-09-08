@@ -12,7 +12,7 @@ export type { ResearchBudget } from "./domain/constants";
  * and every comparison against NaN is false — which would silently disable
  * the limit it is meant to enforce.
  */
-function positiveInt(raw: string | undefined, fallback: number): number {
+export function positiveInt(raw: string | undefined, fallback: number): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }

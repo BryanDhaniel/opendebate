@@ -109,3 +109,22 @@ describe("runtime.build provider selection", () => {
     expect((err as MissingConfigError).missing).toContain("GEMINI_API_KEY");
   });
 });
+
+describe("runtime.build wires the rate limiter from env", () => {
+  it("constructs a rate limiter honouring env-provided limits", () => {
+    const rt = build({
+      OPENAI_API_KEY: "ok",
+      RATE_LIMIT_WINDOW_MS: "1000",
+      MAX_CREATES_PER_IP: "2",
+      MAX_CREATES_GLOBAL: "100",
+      DATA_DIR,
+    } as unknown as NodeJS.ProcessEnv);
+    const ip = "9.9.9.9";
+    expect(rt.rateLimiter.check(ip, 1000).allowed).toBe(true);
+    expect(rt.rateLimiter.check(ip, 1000).allowed).toBe(true);
+    // The third creation in the same window exceeds the per-IP cap of 2.
+    const third = rt.rateLimiter.check(ip, 1000);
+    expect(third.allowed).toBe(false);
+    expect(third.limit).toBe(2);
+  });
+});

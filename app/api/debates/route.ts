@@ -1,7 +1,11 @@
-import { getRuntime, MissingConfigError } from "@/lib/debate-engine/runtime";
+import {
+  getRuntime,
+  MissingConfigError,
+  type Runtime,
+} from "@/lib/debate-engine/runtime";
 import { LIMITS, MODELS } from "@/lib/config";
 import { sanitizeTopic } from "@/lib/validation";
-import { creationRateLimiter, clientIp } from "@/lib/server/rate-limit";
+import { clientIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +24,20 @@ export async function POST(request: Request) {
     }
   }
 
-  const decision = creationRateLimiter.check(clientIp(request));
+  // Resolve the runtime (composition root) so we use its rate limiter rather than
+  // a module singleton. This constructs provider clients on first call, but no
+  // network call happens until a debate actually runs.
+  let app: Runtime;
+  try {
+    app = getRuntime();
+  } catch (error) {
+    if (error instanceof MissingConfigError) {
+      return Response.json({ error: error.message }, { status: 503 });
+    }
+    throw error;
+  }
+
+  const decision = app.rateLimiter.check(clientIp(request));
   if (!decision.allowed) {
     return new Response(
       JSON.stringify({ error: "Too many debates created. Try again shortly." }),
@@ -49,7 +66,6 @@ export async function POST(request: Request) {
   }
 
   try {
-    const app = getRuntime();
     if (app.store.activeCount() >= LIMITS.maxActiveDebates) {
       return Response.json(
         { error: "Too many active debates. Try again shortly." },
@@ -62,9 +78,6 @@ export async function POST(request: Request) {
     });
     return Response.json({ debate }, { status: 201 });
   } catch (error) {
-    if (error instanceof MissingConfigError) {
-      return Response.json({ error: error.message }, { status: 503 });
-    }
     console.error("[api] failed to create debate:", error);
     return Response.json({ error: "Failed to create debate" }, { status: 500 });
   }

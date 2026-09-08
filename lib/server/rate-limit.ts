@@ -1,5 +1,3 @@
-import { LIMITS } from "../config";
-
 /**
  * In-memory sliding-window limiter. Each key accumulates timestamps of
  * consumptions within `windowMs`; a consumption is allowed while the count in
@@ -122,10 +120,3 @@ export function clientIp(request: Request): string {
   if (xff) return xff.split(",")[0]!.trim();
   return "local";
 }
-
-/** Singleton wired to the configured limits; persists across requests. */
-export const creationRateLimiter = new CreationRateLimiter(
-  LIMITS.rateLimitWindowMs,
-  LIMITS.maxCreatesPerIp,
-  LIMITS.maxCreatesGlobal,
-);

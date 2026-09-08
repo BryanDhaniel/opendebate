@@ -1,5 +1,6 @@
 import path from "node:path";
 import {
+  positiveInt,
   resolveModel,
   resolveProvider,
   type ProviderName,
@@ -12,6 +13,7 @@ import type { AIProvider } from "../ai/types";
 import { TavilyResearchTool } from "../research/tavily-tool";
 import { DebateBus } from "./bus";
 import { DebateRunner, type EngineDeps } from "./engine";
+import { CreationRateLimiter } from "@/lib/server/rate-limit";
 import { DebateStore } from "./store";
 
 export class MissingConfigError extends Error {
@@ -24,6 +26,7 @@ export interface Runtime {
   store: DebateStore;
   bus: DebateBus;
   runner: DebateRunner;
+  rateLimiter: CreationRateLimiter;
 }
 
 /** Maps a provider to the env var that holds its API key. */
@@ -70,7 +73,15 @@ export function build(env: NodeJS.ProcessEnv = process.env): Runtime {
     researchTool,
   };
 
-  return { store, bus, runner: new DebateRunner(deps) };
+  // The creation rate limiter is composed here (not a module singleton) so its
+  // limits flow from the same `env` as the rest of the runtime and it sits on
+  // the Runtime graph that tests parameterize.
+  const rateLimiter = new CreationRateLimiter(
+    positiveInt(env.RATE_LIMIT_WINDOW_MS, 60_000),
+    positiveInt(env.MAX_CREATES_PER_IP, 5),
+    positiveInt(env.MAX_CREATES_GLOBAL, 20),
+  );
+  return { store, bus, runner: new DebateRunner(deps), rateLimiter };
 }
 
 /**
