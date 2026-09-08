@@ -5,6 +5,7 @@ import {
 } from "../prompts/judge";
 import { judgeOutputSchema, type JudgeOutput } from "./schemas";
 import { LIMITS, TOKEN_LIMITS } from "../config";
+import { truncate } from "../format";
 import type { AIProvider, Judge, JudgeContext } from "./types";
 import type { CriterionKey, JudgeResult, Speaker } from "../domain/types";
 import { CRITERIA_KEYS } from "../domain/types";
@@ -135,8 +136,4 @@ function describeError(error: unknown): string {
     return `the response was not valid against the verdict schema: ${truncate(text, 300)}`;
   }
   return error instanceof Error ? truncate(error.message, 300) : "unknown error";
-}
-
-function truncate(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, max)}…`;
 }

@@ -10,6 +10,7 @@ import {
 } from "../prompts/debater";
 import { researchQueriesSchema, researchSynthesisSchema } from "./schemas";
 import { LIMITS, TOKEN_LIMITS } from "../config";
+import { truncate } from "../format";
 import type {
   AIProvider,
   ClosingContext,
@@ -30,10 +31,6 @@ function emptyResearch(note: string): ResearchResult {
     counterArguments: [],
     uncertainties: [note],
   };
-}
-
-function truncate(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, max)}…`;
 }
 
 export class AiDebater implements Debater {

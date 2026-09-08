@@ -225,7 +225,7 @@ describe("debate engine", () => {
     expect(events[events.length - 1].type).toBe("debate_failed");
     const final = events[events.length - 1].debate;
     expect(final.stage).toBe("failed");
-    expect(final.error).toMatch(/Judging failed/);
+    expect(final.error).toMatch(/Judge deliberating failed/);
   });
 
   it("enforces the research timeout and continues with empty research", async () => {

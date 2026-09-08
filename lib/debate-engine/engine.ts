@@ -11,6 +11,7 @@ import {
   validateJudgeResult,
 } from "../domain/types";
 import { DEFAULT_RESEARCH_BUDGET, LIMITS, type ResearchBudget } from "../config";
+import { STAGE_LABELS } from "../domain/labels";
 import type { Debater, Judge } from "../ai/types";
 import type { ResearchTool, SearchFn } from "../research/types";
 import { formatTranscript, lastMessageOfKind } from "../ai/transcript";
@@ -94,19 +95,6 @@ const COMPLETED_EVENT: Partial<Record<DebateStage, DebateEventType>> = {
   closing_a: "closing_completed",
   closing_b: "closing_completed",
   judging: "judging_completed",
-};
-
-const STAGE_LABEL: Partial<Record<DebateStage, string>> = {
-  researching: "Research",
-  opening_a: "Opening statement (A)",
-  opening_b: "Opening statement (B)",
-  rebuttal_a: "Rebuttal (A)",
-  rebuttal_b: "Rebuttal (B)",
-  cross_examination_a: "Cross examination (A questions B)",
-  cross_examination_b: "Cross examination (B questions A)",
-  closing_a: "Closing statement (A)",
-  closing_b: "Closing statement (B)",
-  judging: "Judging",
 };
 
 export class DebateRunner {
@@ -206,7 +194,10 @@ export class DebateRunner {
       body: () => Promise<void>,
     ): Promise<void> => {
       setStage(name);
-      const label = STAGE_LABEL[name] ?? name;
+      // Use the canonical label map (lib/domain/labels.ts) rather than a second,
+      // drifting stage-label table — this keeps emitted event details consistent
+      // with the UI's StageIndicator labels.
+      const label = STAGE_LABELS[name];
       this.emit(debate, START_EVENT[name] ?? "debate_started", label);
       try {
         await withRetry(body);
