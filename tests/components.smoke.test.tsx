@@ -56,7 +56,7 @@ function makeDebate(overrides: Partial<Debate> = {}): Debate {
         stage: "opening_b",
         speaker: "B",
         kind: "opening",
-        // Long enough to verify full rendering without a truncation control.
+        // Long enough to trigger the "Show more" collapse affordance.
         content: `${"A very long opening statement. ".repeat(40)}`,
         createdAt: "2026-01-01T00:00:01.000Z",
       },
@@ -186,13 +186,9 @@ describe("transcript", () => {
     expect(html).toContain("A short rebuttal.");
   });
 
-  it("renders long messages in full without a disclosure control", () => {
-    // The redesign dropped the "Show more"/"Show less" truncation so the full
-    // prose is always readable; assert the long opening is present and that no
-    // collapse affordance exists.
-    expect(html).toContain("A very long opening statement.");
-    expect(html).not.toContain("Show more");
-    expect(html).not.toContain("Show less");
+  it("collapses long messages behind a disclosure control", () => {
+    expect(html).toContain("Show more");
+    expect(html).toContain('aria-expanded="false"');
   });
 
   it("provides a speaker filter group and a live region", () => {

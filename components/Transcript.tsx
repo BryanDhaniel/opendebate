@@ -5,6 +5,9 @@ import type { Debate, DebateMessage, Speaker } from "@/lib/domain/types";
 import { KIND_LABELS } from "@/lib/domain/labels";
 import { usePrefersReducedMotion } from "@/lib/client/use-reduced-motion";
 
+/** Messages longer than this get a "show more" affordance. */
+const COLLAPSE_THRESHOLD = 480;
+
 /** Distance (px) from the bottom that still counts as "following along". */
 const FOLLOW_SLACK = 80;
 
@@ -37,7 +40,7 @@ export function Transcript({ debate }: { debate: Debate }) {
     [debate.transcript, filter],
   );
 
-  // Only auto-scroll when the reader is already at the bottom, otherwise we
+  // Only auto-scroll when the reader is already at the bottom — otherwise we
   // would yank the viewport away from what they are reading.
   useEffect(() => {
     if (!atBottom) return;
@@ -123,6 +126,12 @@ export function Transcript({ debate }: { debate: Debate }) {
           aria-label="Debate transcript"
           className="scroll-area relative flex max-h-[55vh] min-h-[14rem] flex-col overflow-y-auto p-4 sm:p-5"
         >
+          {/* Center spine — the arena's dividing line. Desktop only. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 bg-border lg:block"
+          />
+
           {messages.length === 0 ? (
             <p className="m-auto text-center text-sm text-fg-subtle">
               {debate.transcript.length === 0
@@ -130,7 +139,7 @@ export function Transcript({ debate }: { debate: Debate }) {
                 : `No entries from Debater ${filter} yet.`}
             </p>
           ) : (
-            <ol className="flex flex-col gap-5 sm:gap-6">
+            <ol className="flex flex-col gap-5">
               {messages.map((message) => (
                 <MessageRow key={message.id} message={message} />
               ))}
@@ -159,23 +168,79 @@ function MessageRow({ message }: { message: DebateMessage }) {
   const sideSoft = isA ? "bg-for-soft" : "bg-against-soft";
 
   return (
-    // The colored left border is the arena timeline: each turn gets a
-    // speaker-coloured segment running the full height of the message.
-    <li className={`relative border-l-2 pl-4 sm:pl-5 ${sideBorder}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`text-[11px] font-bold tracking-widest ${sideColor}`}>
-          DEBATER {message.speaker}
-        </span>
-        <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-fg-subtle">
-          {KIND_LABELS[message.kind]}
-        </span>
-      </div>
+    <li className="relative lg:grid lg:grid-cols-2">
+      {/* On desktop the spacer occupies the opposite column so each side's
+          content hugs the center spine: A left, B right. */}
+      {!isA && <div aria-hidden="true" className="hidden lg:block" />}
 
       <div
-        className={`mt-2 max-w-[68ch] whitespace-pre-wrap rounded-control border px-4 py-3 text-[15px] leading-relaxed text-fg sm:px-5 ${sideBorder} ${sideSoft}`}
+        className={`border-l-2 pl-3 lg:border-l-0 lg:pl-0 ${sideBorder} ${
+          isA ? "lg:pr-6 lg:text-right" : "lg:pl-6 lg:text-left"
+        }`}
       >
-        {message.content}
+        <div
+          className={`flex items-center gap-2 ${isA ? "lg:justify-end" : ""}`}
+        >
+          <span className={`text-xs font-bold tracking-widest ${sideColor}`}>
+            DEBATER {message.speaker}
+          </span>
+          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-fg-subtle">
+            {KIND_LABELS[message.kind]}
+          </span>
+        </div>
+
+        <MessageBubble
+          message={message}
+          sideColor={sideColor}
+          sideSoft={sideSoft}
+          sideBorder={sideBorder}
+          rightAligned={isA}
+        />
       </div>
+
+      {isA && <div aria-hidden="true" className="hidden lg:block" />}
     </li>
+  );
+}
+
+function MessageBubble({
+  message,
+  sideColor,
+  sideSoft,
+  sideBorder,
+  rightAligned,
+}: {
+  message: DebateMessage;
+  sideColor: string;
+  sideSoft: string;
+  sideBorder: string;
+  rightAligned: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const collapsible = message.content.length > COLLAPSE_THRESHOLD;
+  const shown =
+    collapsible && !expanded
+      ? truncateAtWord(message.content, COLLAPSE_THRESHOLD)
+      : message.content;
+
+  return (
+    <div
+      className={`mt-1.5 inline-block max-w-full whitespace-pre-wrap rounded-control border px-4 py-3 text-sm leading-relaxed text-fg lg:max-w-[88%] ${
+        rightAligned ? "lg:ml-auto" : "lg:mr-auto"
+      } ${sideBorder} ${sideSoft}`}
+    >
+      {shown}
+      {collapsible && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className={`mt-2 block text-xs font-semibold underline underline-offset-2 hover:no-underline ${sideColor}`}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
   );
 }
