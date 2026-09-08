@@ -160,12 +160,14 @@ error, a bad model name) fail identically twice, doubling cost for no benefit.
 
 **Fix:** exponential backoff with jitter, and retry only on retryable errors.
 
-*Partial — 2026-09-08:* the retry policy was extracted out of `engine.ts` into
-`lib/debate-engine/stage-guard.ts` (alongside `guardStageOutput`), so it is now
-isolated and directly unit-testable (`tests/stage-guard.test.ts`). This is the
-first, mechanical step — the *behavioral* fix (backoff + retry-on-retryable-only)
-is still TODO. Having the policy in one place makes that follow-up a one-function
-change.
+*[COMPLETE — 2026-09-08, commit `6664d66`]* the retry policy was extracted out of
+`engine.ts` into `lib/debate-engine/stage-guard.ts` (alongside `guardStageOutput`),
+so it is now isolated and directly unit-testable (`tests/stage-guard.test.ts`, 12
+cases). `DebateRunner.record()` collapses the 10 former `validateStageOutput` call
+sites, and the suite is green (tsc/eslint clean, vitest **98** passing). **Candidate
+1 of the architecture review is done.** The remaining *behavioral* fix — exponential
+backoff + jitter, and retry only on retryable errors (429/5xx) — is still TODO; the
+policy now lives in one place, so it is a one-function change in `stage-guard.ts`.
 
 ### I3 — SSE frames are O(n²) in transcript size
 
