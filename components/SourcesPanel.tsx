@@ -14,7 +14,7 @@ export function SourcesPanel({ debate }: { debate: Debate }) {
         Research sources
       </h2>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <DebaterSources debate={debate} speaker="A" />
         <DebaterSources debate={debate} speaker="B" />
       </div>
