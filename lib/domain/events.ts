@@ -35,3 +35,23 @@ export const TERMINAL_EVENT_TYPES: readonly DebateEventType[] = [
 export function isTerminalEvent(event: DebateEvent): boolean {
   return TERMINAL_EVENT_TYPES.includes(event.type);
 }
+
+/**
+ * Builds the terminal event for a debate that has already reached a terminal
+ * stage but whose terminal event is absent from the event log — e.g. the server
+ * restarted and the in-memory bus history was lost. The engine owns the event
+ * protocol, so this lives in the domain layer rather than the SSE transport,
+ * which should only relay events it is handed.
+ */
+export function synthesizeTerminalEvent(
+  debate: Debate,
+  lastSeq = 0,
+): DebateEvent {
+  return {
+    seq: lastSeq + 1,
+    type: debate.stage === "completed" ? "debate_completed" : "debate_failed",
+    stage: debate.stage,
+    debate: JSON.parse(JSON.stringify(debate)),
+    at: new Date().toISOString(),
+  };
+}

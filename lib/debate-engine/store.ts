@@ -67,6 +67,19 @@ export class DebateStore {
     });
   }
 
+  /**
+   * Reclaims a debate whose stream was opened but abandoned by the client before
+   * the engine moved it off `idle`. Returns true if it was removed. Centralises
+   * the idle-reclaim policy (alongside `sweepIdle`) so HTTP adapters can signal
+   * "client gone" without reaching into store state or knowing about `idle`.
+   */
+  reclaimIfIdle(id: string): boolean {
+    const debate = this.debates.get(id);
+    if (!debate || debate.stage !== "idle") return false;
+    this.delete(id);
+    return true;
+  }
+
   async save(debate: Debate): Promise<void> {
     this.debates.set(debate.id, debate);
     try {

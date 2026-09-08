@@ -1,5 +1,9 @@
 import { isTerminal } from "@/lib/domain/state-machine";
-import { isTerminalEvent, type DebateEvent } from "@/lib/domain/events";
+import {
+  isTerminalEvent,
+  synthesizeTerminalEvent,
+  type DebateEvent,
+} from "@/lib/domain/events";
 import {
   getRuntime,
   MissingConfigError,
@@ -82,19 +86,11 @@ export async function GET(
       }
 
       // If the debate ended before this connection (or the server restarted
-      // and the event log is gone), emit the current state and finish.
+      // and the event log is gone), emit the current state and finish. The
+      // terminal event is synthesised by the domain layer, not hand-built here.
       if (isTerminal(debate.stage)) {
         if (!last || !isTerminalEvent(last)) {
-          send({
-            seq: (last?.seq ?? 0) + 1,
-            type:
-              debate.stage === "completed"
-                ? "debate_completed"
-                : "debate_failed",
-            stage: debate.stage,
-            debate: JSON.parse(JSON.stringify(debate)),
-            at: new Date().toISOString(),
-          });
+          send(synthesizeTerminalEvent(debate, last?.seq ?? 0));
         }
         close();
         return;
@@ -117,11 +113,9 @@ export async function GET(
       request.signal.addEventListener("abort", () => {
         // If the client abandoned the stream before the engine moved the debate
         // off "idle", reclaim the slot now instead of waiting for the idle TTL
-        // (REVIEW C2). A debate already running past idle is left alone — the
-        // engine's background run owns it and would just re-persist it.
-        if (debate.stage === "idle") {
-          app.store.delete(id);
-        }
+        // (REVIEW C2). The store owns the idle-reclaim policy; we only signal
+        // that the client is gone.
+        app.store.reclaimIfIdle(id);
         close();
       });
     },
